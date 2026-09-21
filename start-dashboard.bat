@@ -8,10 +8,10 @@ echo   Leave both windows open while you use the dashboard.
 echo   Close this window's two children (or Ctrl+C in each) to stop.
 echo.
 
-start "Morning Scanner - Backend" cmd /k "cd /d "%~dp0backend" && start-backend.bat"
+start "Morning Scanner - Backend" cmd /k call "%~dp0backend\start-backend.bat"
 timeout /t 4 /nobreak >nul
 
-start "Morning Scanner - Frontend" cmd /k "cd /d "%~dp0frontend" && start-frontend.bat"
+start "Morning Scanner - Frontend" cmd /k call "%~dp0frontend\start-frontend.bat"
 timeout /t 5 /nobreak >nul
 
 start http://localhost:5173
