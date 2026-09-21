@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.routes._common import serialize_candidate
 from app.api.schemas import CandidateOut, GradeIn
@@ -19,8 +19,11 @@ def _today_candidates_query(db: Session):
     return (
         db.query(ScanCandidate)
         .options(
-            joinedload(ScanCandidate.setup_matches),
-            joinedload(ScanCandidate.catalyst_tags),
+            # selectinload avoids the cartesian-product duplication that
+            # joinedload'ing two "many" relationships together causes -- see
+            # scan.py for the full explanation.
+            selectinload(ScanCandidate.setup_matches),
+            selectinload(ScanCandidate.catalyst_tags),
             joinedload(ScanCandidate.grade),
         )
         .filter(ScanCandidate.scan_date == today)

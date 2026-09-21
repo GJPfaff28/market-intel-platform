@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.routes._common import serialize_candidate
 from app.api.schemas import CandidateOut
@@ -24,8 +24,14 @@ def get_candidates(
     query = (
         db.query(ScanCandidate)
         .options(
-            joinedload(ScanCandidate.setup_matches),
-            joinedload(ScanCandidate.catalyst_tags),
+            # selectinload, not joinedload, for the two collections: joinedload'ing
+            # multiple "many" relationships in one query produces a cartesian
+            # product (N setups x M catalysts rows), which duplicates entries
+            # within each collection once hydrated -- confirmed live (AMD showing
+            # all 3 setups listed twice). selectinload runs a separate query per
+            # collection instead, avoiding the multiplication entirely.
+            selectinload(ScanCandidate.setup_matches),
+            selectinload(ScanCandidate.catalyst_tags),
             joinedload(ScanCandidate.grade),
         )
         .filter(ScanCandidate.scan_date == today)
