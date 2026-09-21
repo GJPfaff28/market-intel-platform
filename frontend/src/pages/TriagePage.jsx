@@ -75,6 +75,7 @@ export function TriagePage() {
                 <th>Price</th>
                 <th>% Chg</th>
                 <th>RVol</th>
+                <th title="Volume traded so far, as a % of average daily volume">PM Vol %</th>
                 <th>Catalyst Grade</th>
                 <th>Setup Grade</th>
                 <th>Today's List?</th>
@@ -99,6 +100,7 @@ export function TriagePage() {
                     <PctChange value={c.pct_change} />
                   </td>
                   <td>{c.rvol.toFixed(1)}x</td>
+                  <td>{(c.rvol * 100).toFixed(0)}%</td>
                   <td>
                     <GradePill
                       grade={c.grade?.catalyst_grade || c.suggested_catalyst_grade}
@@ -127,8 +129,8 @@ export function TriagePage() {
                 {selected.ticker} — ${selected.price.toFixed(2)} (<PctChange value={selected.pct_change} />)
               </h2>
               <p style={{ color: "var(--text-muted)", fontSize: 12.5 }}>
-                RVol {selected.rvol.toFixed(1)}x · Avg Vol {selected.avg_volume.toLocaleString()} · Day Vol{" "}
-                {selected.day_volume.toLocaleString()}
+                RVol {selected.rvol.toFixed(1)}x ({(selected.rvol * 100).toFixed(0)}% of avg) · Avg Vol{" "}
+                {selected.avg_volume.toLocaleString()} · Day Vol {selected.day_volume.toLocaleString()}
                 {selected.float_shares ? ` · Float ~${(selected.float_shares / 1_000_000).toFixed(1)}M` : ""}
               </p>
 

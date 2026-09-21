@@ -10,6 +10,7 @@ const COLUMNS = [
   { key: "price", label: "Price" },
   { key: "pct_change", label: "% Chg" },
   { key: "rvol", label: "RVol" },
+  { key: "pm_vol_pct", label: "PM Vol %" },
   { key: "day_volume", label: "Volume" },
   { key: "prior_grade", label: "Prior Grade" },
 ];
@@ -22,6 +23,8 @@ function sortValue(candidate, key) {
       return candidate.catalyst_tags?.[0]?.summary || "";
     case "prior_grade":
       return candidate.prior_grade?.catalyst_grade || "";
+    case "pm_vol_pct":
+      return candidate.rvol;
     default:
       return candidate[key];
   }
@@ -105,6 +108,7 @@ export function CandidateTable({ candidates, onSelectTicker, selectedTicker }) {
                 <PctChange value={c.pct_change} />
               </td>
               <td>{c.rvol.toFixed(1)}x</td>
+              <td>{(c.rvol * 100).toFixed(0)}%</td>
               <td>{c.day_volume.toLocaleString()}</td>
               <td>
                 <GradePill grade={c.prior_grade?.catalyst_grade} />
