@@ -46,7 +46,9 @@ class AlpacaProvider(MarketDataProvider, NewsProvider):
                 params={"symbols": ",".join(chunk), "feed": self.feed},
             )
             resp.raise_for_status()
-            data = resp.json().get("snapshots", {})
+            # /v2/stocks/snapshots returns the symbol->snapshot map directly at the
+            # top level (confirmed against a live response) -- no "snapshots" envelope.
+            data = resp.json()
             for symbol, snap in data.items():
                 quote = self._snapshot_to_quote(symbol, snap)
                 if quote:
