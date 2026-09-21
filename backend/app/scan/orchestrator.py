@@ -77,11 +77,18 @@ def run_morning_scan(db: Session, settings: Settings | None = None) -> dict:
     quotes = market_data.get_snapshots(all_tickers)
 
     # Clear today's prior run (re-running the scan for the same day replaces results).
+    # Deliberately NOT committed here -- it stays in the same transaction as the
+    # rebuild below, with one commit at the very end. Live testing showed that
+    # committing the delete early creates a real window (the ~2-3 minutes a scan
+    # takes) where anyone loading the dashboard mid-scan sees today's data wiped
+    # but not yet rebuilt. Keeping it all in one transaction means other readers
+    # (SQLite doesn't block readers against an uncommitted writer) keep seeing
+    # yesterday's complete data right up until this scan's results are all ready
+    # and committed at once, instead of a misleading empty gap.
     db.query(ScanCandidate).filter(ScanCandidate.scan_date == today).delete()
     db.query(NearMiss).filter(NearMiss.scan_date == today).delete()
     db.query(SectorOverview).filter(SectorOverview.scan_date == today).delete()
     db.query(MarketOverviewSnapshot).filter(MarketOverviewSnapshot.scan_date == today).delete()
-    db.commit()
 
     candidates_written = 0
     near_misses_written = 0
