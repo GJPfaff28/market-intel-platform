@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.catalysts.scoring import build_catalyst_tags, float_context
 from app.catalysts.sectors import GICS_SECTORS, attribute_sector_driver
 from app.config import Settings, get_settings
-from app.data_providers.base import DailyBar, Quote
+from app.data_providers.base import DailyBar, NewsItem
 from app.data_providers.factory import get_fundamentals_provider, get_market_data_provider
 from app.db.models import (
     CandidateSource,
@@ -42,6 +42,14 @@ def _avg_volume(bars: list[DailyBar], window: int = 20) -> float:
         return 0.0
     recent = bars[-window:]
     return sum(b.volume for b in recent) / len(recent)
+
+
+def _cached_ticker_news(market_data, cache: dict[str, list[NewsItem]], ticker: str, lookback_hours: int) -> list[NewsItem]:
+    """Per-run cache so a ticker that's both a scan candidate AND a sector's top
+    mover only costs one Alpaca news call, not two."""
+    if ticker not in cache:
+        cache[ticker] = market_data.get_news(ticker, lookback_hours=lookback_hours) if hasattr(market_data, "get_news") else []
+    return cache[ticker]
 
 
 def run_morning_scan(db: Session, settings: Settings | None = None) -> dict:
@@ -76,6 +84,7 @@ def run_morning_scan(db: Session, settings: Settings | None = None) -> dict:
     candidates_written = 0
     near_misses_written = 0
     sector_moves: dict[str, list[tuple[str, float]]] = {s: [] for s in GICS_SECTORS}
+    news_cache: dict[str, list[NewsItem]] = {}
 
     for ticker, source in ticker_sources.items():
         quote = quotes.get(ticker)
@@ -130,7 +139,7 @@ def run_morning_scan(db: Session, settings: Settings | None = None) -> dict:
                     )
                 )
 
-            _attach_catalyst_tags(db, candidate, ticker, today, bars, market_data, fundamentals, float_shares)
+            _attach_catalyst_tags(db, candidate, ticker, today, bars, market_data, fundamentals, float_shares, news_cache)
             candidates_written += 1
 
         for nm in near_misses:
@@ -148,7 +157,7 @@ def run_morning_scan(db: Session, settings: Settings | None = None) -> dict:
             )
             near_misses_written += 1
 
-    _write_sector_overview(db, today, sector_moves, quotes)
+    _write_sector_overview(db, today, sector_moves, market_data, news_cache)
     build_market_overview_snapshot(db, market_data, fundamentals, today)
 
     db.commit()
@@ -161,8 +170,8 @@ def run_morning_scan(db: Session, settings: Settings | None = None) -> dict:
     }
 
 
-def _attach_catalyst_tags(db, candidate, ticker, today, bars, market_data, fundamentals, float_shares):
-    news_items = market_data.get_news(ticker, lookback_hours=36) if hasattr(market_data, "get_news") else []
+def _attach_catalyst_tags(db, candidate, ticker, today, bars, market_data, fundamentals, float_shares, news_cache):
+    news_items = _cached_ticker_news(market_data, news_cache, ticker, lookback_hours=36)
     earnings_events = (
         fundamentals.get_earnings_calendar(today, today) if fundamentals else []
     )
@@ -192,8 +201,16 @@ def _write_sector_overview(
     db: Session,
     today: dt.date,
     sector_moves: dict[str, list[tuple[str, float]]],
-    quotes: dict[str, Quote],
+    market_data,
+    news_cache: dict[str, list[NewsItem]],
 ) -> None:
+    macro_headlines: list[str] = []
+    if hasattr(market_data, "get_market_news"):
+        try:
+            macro_headlines = [item.headline for item in market_data.get_market_news(lookback_hours=18)]
+        except Exception:  # noqa: BLE001 -- sector context is a nice-to-have, not worth failing the scan over
+            logger.exception("Failed to fetch general market news for sector attribution")
+
     for sector in GICS_SECTORS:
         moves = sector_moves.get(sector, [])
         if not moves:
@@ -203,13 +220,21 @@ def _write_sector_overview(
         sector_pct_change = sum(pct for _, pct in moves) / len(moves)
         top_ticker, top_pct = max(moves, key=lambda m: abs(m[1]))
 
+        top_mover_headline = None
+        try:
+            top_mover_news = _cached_ticker_news(market_data, news_cache, top_ticker, lookback_hours=36)
+            if top_mover_news:
+                top_mover_headline = top_mover_news[0].headline
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to fetch news for sector top mover %s", top_ticker)
+
         driver = attribute_sector_driver(
             sector_name=sector,
             sector_pct_change=sector_pct_change,
             top_mover_ticker=top_ticker,
             top_mover_pct_change=top_pct,
-            top_mover_headline=None,  # wired to news search in a later pass; see README limitations
-            macro_headlines=[],  # requires a general macro news feed; see README limitations
+            top_mover_headline=top_mover_headline,
+            macro_headlines=macro_headlines,
         )
         db.add(
             SectorOverview(

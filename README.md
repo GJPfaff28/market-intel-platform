@@ -145,11 +145,12 @@ field) for the Market Overview tab's sector breakdown to include it.
   (`EMA8_EXTENSION_PCT` in `backend/app/setups/reversal.py`) is a starting default
   (10%) — the planning rounds specified the indicators but not this exact number.
   Tune it once you're seeing real candidates.
-- **Sector driver attribution** (Market Overview tab) currently attributes moves to
-  a dominant stock within the scanned universe, but doesn't yet have a general macro
-  news feed to match against sector keywords — the macro/policy half of the
-  attribution logic (`app/catalysts/sectors.py`) is wired up but needs a news source
-  feeding it `macro_headlines`.
+- **Sector driver attribution** (Market Overview tab) pulls a general market news feed
+  (Alpaca, no symbol filter) each morning and matches headlines against a per-sector
+  keyword list (`app/catalysts/sectors.py`) for the macro/policy half, plus a
+  per-ticker headline lookup for the dominant-stock half. The keyword list is a
+  reasonable starting set, not exhaustive — expand `_SECTOR_MACRO_KEYWORDS` if you
+  notice a real driver getting missed.
 - **Float shares** are approximated from Finnhub's shares-outstanding figure (its
   free tier doesn't expose true free-float).
 - **Data stack** is the free Alpaca + Finnhub tier. If scan coverage/speed proves

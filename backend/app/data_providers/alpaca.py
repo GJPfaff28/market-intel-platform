@@ -101,16 +101,25 @@ class AlpacaProvider(MarketDataProvider, NewsProvider):
         ][-lookback_days:]
 
     def get_news(self, ticker: str, lookback_hours: int = 24) -> list[NewsItem]:
+        return self._fetch_news(ticker=ticker, lookback_hours=lookback_hours)
+
+    def get_market_news(self, lookback_hours: int = 18, limit: int = 50) -> list[NewsItem]:
+        """General market news (no symbol filter) -- the macro/policy headline pool
+        the Market Overview tab's sector driver attribution matches against
+        (PLANNING.md Tab 4 sector breakdown, 'macro_policy' driver type)."""
+        return self._fetch_news(ticker=None, lookback_hours=lookback_hours, limit=limit)
+
+    def _fetch_news(self, ticker: str | None, lookback_hours: int, limit: int = 20) -> list[NewsItem]:
         since = dt.datetime.utcnow() - dt.timedelta(hours=lookback_hours)
-        resp = self._client.get(
-            "/v1beta1/news",
-            params={"symbols": ticker, "start": since.isoformat() + "Z", "limit": 20},
-        )
+        params = {"start": since.isoformat() + "Z", "limit": limit}
+        if ticker:
+            params["symbols"] = ticker
+        resp = self._client.get("/v1beta1/news", params=params)
         resp.raise_for_status()
         items = resp.json().get("news", [])
         return [
             NewsItem(
-                ticker=ticker,
+                ticker=ticker or ",".join(item.get("symbols", [])),
                 headline=item.get("headline", ""),
                 summary=item.get("summary", ""),
                 source=item.get("source", "Benzinga via Alpaca"),
