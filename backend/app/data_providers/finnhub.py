@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
+import time
 
 import httpx
 
@@ -10,6 +12,14 @@ from app.data_providers.base import AnalystAction, EarningsEvent, FundamentalsPr
 BASE_URL = "https://finnhub.io/api/v1"
 
 _HOUR_MAP = {"bmo": "bmo", "amc": "amc", "dmh": "unknown"}
+
+logger = logging.getLogger("scanner.finnhub")
+
+# Finnhub's free tier caps out around 60 requests/minute. A scan touches this
+# endpoint once per evaluated ticker (100+ per run), so without throttling it
+# reliably hits 429s partway through -- which used to crash the whole scan.
+# Staying under ~55/min leaves headroom for other Finnhub calls in the same run.
+_MIN_REQUEST_INTERVAL_SECONDS = 60 / 55
 
 
 class FinnhubProvider(FundamentalsProvider):
@@ -21,15 +31,39 @@ class FinnhubProvider(FundamentalsProvider):
     def __init__(self, settings: Settings):
         self._token = settings.finnhub_api_key
         self._client = httpx.Client(base_url=BASE_URL, timeout=10.0)
+        self._last_request_at = 0.0
 
     def close(self) -> None:
         self._client.close()
 
-    def _get(self, path: str, params: dict) -> dict | list:
+    def _throttle(self) -> None:
+        elapsed = time.monotonic() - self._last_request_at
+        wait = _MIN_REQUEST_INTERVAL_SECONDS - elapsed
+        if wait > 0:
+            time.sleep(wait)
+        self._last_request_at = time.monotonic()
+
+    def _get(self, path: str, params: dict, retry_on_429: bool = True) -> dict | list | None:
+        """Fails soft: logs and returns None on any error instead of raising, so
+        one ticker's rate limit or plan-tier gate doesn't take down the whole scan.
+        Retries once on 429 after a short backoff, since that's usually transient.
+        """
+        self._throttle()
         params = {**params, "token": self._token}
-        resp = self._client.get(path, params=params)
-        resp.raise_for_status()
-        return resp.json()
+        try:
+            resp = self._client.get(path, params=params)
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 429 and retry_on_429:
+                logger.warning("Finnhub 429 on %s -- backing off 5s and retrying once", path)
+                time.sleep(5)
+                return self._get(path, {k: v for k, v in params.items() if k != "token"}, retry_on_429=False)
+            logger.warning("Finnhub request failed (%s): %s", path, exc)
+            return None
+        except httpx.RequestError as exc:
+            logger.warning("Finnhub request failed (%s): %s", path, exc)
+            return None
 
     def get_economic_calendar_raw(self, start: dt.date, end: dt.date) -> list[dict]:
         """Scheduled macro events (FOMC, CPI, NFP, etc.). Gated on some Finnhub plan
@@ -55,15 +89,13 @@ class FinnhubProvider(FundamentalsProvider):
         ]
 
     def get_analyst_actions(self, ticker: str, lookback_days: int = 3) -> list[AnalystAction]:
-        # Finnhub's upgrade/downgrade endpoint is gated on some plans; fail soft.
+        # Finnhub's upgrade/downgrade endpoint is gated on some plans; _get() fails
+        # soft (returns None) rather than raising, so this just falls through to [].
         since = dt.date.today() - dt.timedelta(days=lookback_days)
-        try:
-            data = self._get(
-                "/stock/upgrade-downgrade",
-                {"symbol": ticker, "from": since.isoformat(), "to": dt.date.today().isoformat()},
-            )
-        except httpx.HTTPStatusError:
-            return []
+        data = self._get(
+            "/stock/upgrade-downgrade",
+            {"symbol": ticker, "from": since.isoformat(), "to": dt.date.today().isoformat()},
+        )
         rows = data if isinstance(data, list) else []
         return [
             AnalystAction(

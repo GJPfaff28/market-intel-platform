@@ -6,16 +6,12 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import logging
 
-import httpx
 from sqlalchemy.orm import Session
 
 from app.data_providers.alpaca import AlpacaProvider
 from app.data_providers.finnhub import FinnhubProvider
 from app.db.models import MarketOverviewSnapshot
-
-logger = logging.getLogger("scanner.market_overview")
 
 # Real indices (S&P 500, Nasdaq, Dow, Russell 2000) aren't tradable equities on
 # Alpaca's feed -- their liquid ETF proxies are used instead, same convention most
@@ -43,21 +39,14 @@ def build_market_overview_snapshot(
     earnings_calendar = []
     econ_calendar = []
     if fundamentals is not None:
-        try:
-            events = fundamentals.get_earnings_calendar(today, today + dt.timedelta(days=7))
-            earnings_calendar = [
-                {"ticker": e.ticker, "date": e.date.isoformat(), "when": e.when, "eps_estimate": e.eps_estimate}
-                for e in events
-            ]
-        except httpx.HTTPStatusError:
-            logger.warning("Earnings calendar fetch failed (check Finnhub plan/rate limits)")
-
-        try:
-            econ_calendar = _fetch_economic_calendar(fundamentals, today, today + dt.timedelta(days=7))
-        except httpx.HTTPStatusError:
-            # Finnhub's general economic calendar (FOMC/CPI/NFP) is gated on some
-            # plan tiers; fail soft rather than breaking the whole scan.
-            logger.warning("Economic calendar fetch failed -- may require a higher Finnhub tier")
+        # FinnhubProvider._get() already fails soft (logs + returns None) on any
+        # HTTP error, rate limit, or plan-tier gate -- these calls can't raise.
+        events = fundamentals.get_earnings_calendar(today, today + dt.timedelta(days=7))
+        earnings_calendar = [
+            {"ticker": e.ticker, "date": e.date.isoformat(), "when": e.when, "eps_estimate": e.eps_estimate}
+            for e in events
+        ]
+        econ_calendar = _fetch_economic_calendar(fundamentals, today, today + dt.timedelta(days=7))
 
     snapshot = MarketOverviewSnapshot(
         scan_date=today,
