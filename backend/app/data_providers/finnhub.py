@@ -7,7 +7,7 @@ import time
 import httpx
 
 from app.config import Settings
-from app.data_providers.base import AnalystAction, EarningsEvent, FundamentalsProvider
+from app.data_providers.base import AnalystAction, EarningsEvent, FundamentalsProvider, NewsItem
 
 BASE_URL = "https://finnhub.io/api/v1"
 
@@ -64,6 +64,29 @@ class FinnhubProvider(FundamentalsProvider):
         except httpx.RequestError as exc:
             logger.warning("Finnhub request failed (%s): %s", path, exc)
             return None
+
+    def get_company_news(self, ticker: str, start: dt.date, end: dt.date) -> list[NewsItem]:
+        """Per-company news feed (free tier, unlike upgrade-downgrade/economic
+        calendar). More reliable than Alpaca's symbol-tagged search since it's a
+        dedicated feed per ticker, not a broad search that also returns roundup
+        articles tagged with that symbol in passing -- see catalysts/scoring.py
+        and NewsItem.verified_relevant.
+        """
+        data = self._get("/company-news", {"symbol": ticker, "from": start.isoformat(), "to": end.isoformat()})
+        items = data if isinstance(data, list) else []
+        return [
+            NewsItem(
+                ticker=ticker,
+                headline=item.get("headline", ""),
+                summary=item.get("summary", ""),
+                source=item.get("source", "Finnhub"),
+                published_at=dt.datetime.fromtimestamp(item.get("datetime", 0), tz=dt.timezone.utc),
+                url=item.get("url", ""),
+                tagged_symbol_count=1,
+                verified_relevant=True,
+            )
+            for item in items
+        ]
 
     def get_economic_calendar_raw(self, start: dt.date, end: dt.date) -> list[dict]:
         """Scheduled macro events (FOMC, CPI, NFP, etc.). Gated on some Finnhub plan

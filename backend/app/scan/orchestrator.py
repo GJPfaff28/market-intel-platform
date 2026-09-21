@@ -13,7 +13,7 @@ import logging
 
 from sqlalchemy.orm import Session
 
-from app.catalysts.scoring import build_catalyst_tags, float_context
+from app.catalysts.scoring import build_catalyst_tags, float_context, pick_best_headline
 from app.catalysts.sectors import GICS_SECTORS, attribute_sector_driver
 from app.config import Settings, get_settings
 from app.data_providers.base import DailyBar, NewsItem
@@ -45,11 +45,21 @@ def _avg_volume(bars: list[DailyBar], window: int = 20) -> float:
     return sum(b.volume for b in recent) / len(recent)
 
 
-def _cached_ticker_news(market_data, cache: dict[str, list[NewsItem]], ticker: str, lookback_hours: int) -> list[NewsItem]:
+def _cached_combined_news(
+    market_data, fundamentals, cache: dict[str, list[NewsItem]], ticker: str, lookback_hours: int, today: dt.date
+) -> list[NewsItem]:
     """Per-run cache so a ticker that's both a scan candidate AND a sector's top
-    mover only costs one Alpaca news call, not two."""
+    mover only costs one round of news calls, not two. Combines Alpaca's broader
+    symbol-search (noisier, but catches things Finnhub might not) with Finnhub's
+    per-company feed (more reliable relevance -- see NewsItem.verified_relevant),
+    letting catalysts/scoring.py's relevance sort pick the best of both.
+    """
     if ticker not in cache:
-        cache[ticker] = market_data.get_news(ticker, lookback_hours=lookback_hours) if hasattr(market_data, "get_news") else []
+        alpaca_news = market_data.get_news(ticker, lookback_hours=lookback_hours) if hasattr(market_data, "get_news") else []
+        finnhub_news = (
+            fundamentals.get_company_news(ticker, today - dt.timedelta(days=2), today) if fundamentals else []
+        )
+        cache[ticker] = alpaca_news + finnhub_news
     return cache[ticker]
 
 
@@ -166,7 +176,7 @@ def run_morning_scan(db: Session, settings: Settings | None = None) -> dict:
             )
             near_misses_written += 1
 
-    _write_sector_overview(db, today, sector_moves, market_data, news_cache)
+    _write_sector_overview(db, today, sector_moves, market_data, fundamentals, news_cache)
     build_market_overview_snapshot(db, market_data, fundamentals, today)
 
     db.commit()
@@ -180,7 +190,7 @@ def run_morning_scan(db: Session, settings: Settings | None = None) -> dict:
 
 
 def _attach_catalyst_tags(db, candidate, ticker, today, bars, market_data, fundamentals, float_shares, news_cache):
-    news_items = _cached_ticker_news(market_data, news_cache, ticker, lookback_hours=48)
+    news_items = _cached_combined_news(market_data, fundamentals, news_cache, ticker, lookback_hours=48, today=today)
     earnings_events = (
         fundamentals.get_earnings_calendar(today, today) if fundamentals else []
     )
@@ -211,6 +221,7 @@ def _write_sector_overview(
     today: dt.date,
     sector_moves: dict[str, list[tuple[str, float]]],
     market_data,
+    fundamentals,
     news_cache: dict[str, list[NewsItem]],
 ) -> None:
     macro_headlines: list[str] = []
@@ -231,9 +242,10 @@ def _write_sector_overview(
 
         top_mover_headline = None
         try:
-            top_mover_news = _cached_ticker_news(market_data, news_cache, top_ticker, lookback_hours=48)
-            if top_mover_news:
-                top_mover_headline = top_mover_news[0].headline
+            top_mover_news = _cached_combined_news(
+                market_data, fundamentals, news_cache, top_ticker, lookback_hours=48, today=today
+            )
+            top_mover_headline = pick_best_headline(top_mover_news)
         except Exception:  # noqa: BLE001
             logger.exception("Failed to fetch news for sector top mover %s", top_ticker)
 

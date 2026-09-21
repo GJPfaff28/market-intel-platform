@@ -48,6 +48,13 @@ class NewsItem:
     # every ticker they mention in passing, alongside genuine single-stock catalyst
     # articles -- this lets callers prefer the latter. See catalysts/scoring.py.
     tagged_symbol_count: int = 1
+    # True for items from a source that's inherently per-company (e.g. Finnhub's
+    # /company-news, a dedicated feed per ticker), as opposed to Alpaca's broader
+    # symbol-tagged search. Skips the headline-text relevance check in
+    # catalysts/scoring.py, since a company name in the text ("Google" vs ticker
+    # "GOOGL") won't always literally match the ticker string even when the
+    # article genuinely is about that company.
+    verified_relevant: bool = False
 
 
 @dataclass

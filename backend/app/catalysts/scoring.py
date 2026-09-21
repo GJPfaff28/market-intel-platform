@@ -55,15 +55,38 @@ def _categorize_headline(headline: str) -> str:
     return "other"
 
 
-def _mentions_ticker(item: NewsItem) -> bool:
-    """Does the article's own text actually name this ticker, as opposed to just
-    being in Alpaca's (often loose/mistagged) symbols list for the request? This
-    catches cases like a "$6.51 Diesel..." economy article that Alpaca returns for
-    META's news query despite never mentioning Meta anywhere in the text -- a much
-    more reliable relevance signal than the symbol-count heuristic alone.
+def _is_relevant(item: NewsItem) -> bool:
+    """Is this article genuinely about this ticker? Two paths: (1) it came from a
+    source that's inherently per-company (Finnhub's /company-news), which is
+    trusted without a text check since a company name ("Google") won't always
+    literally match its ticker ("GOOGL"); or (2) the ticker itself is actually
+    named in the headline/summary text, as opposed to just being in Alpaca's
+    (often loose/mistagged) symbols list for the request -- catches cases like a
+    "$6.51 Diesel..." economy article that Alpaca returns for META's news query
+    despite never mentioning Meta anywhere in the text.
     """
+    if item.verified_relevant:
+        return True
     pattern = re.compile(rf"\b{re.escape(item.ticker)}\b", re.IGNORECASE)
     return bool(pattern.search(item.headline) or pattern.search(item.summary))
+
+
+def rank_news_by_relevance(news_items: list[NewsItem]) -> list[NewsItem]:
+    """Most relevant first. Priority: (1) is this article genuinely relevant
+    (per-company source, or the ticker is actually named in the text) -- the
+    strongest signal, since Alpaca's symbol tagging alone proved unreliable;
+    (2) fewer tagged symbols = more likely a single-stock article, not a
+    "10 stocks whale activity" roundup; (3) most recent first among equally
+    relevant items."""
+    return sorted(
+        news_items,
+        key=lambda item: (0 if _is_relevant(item) else 1, item.tagged_symbol_count, -item.published_at.timestamp()),
+    )
+
+
+def pick_best_headline(news_items: list[NewsItem]) -> str | None:
+    ranked = rank_news_by_relevance(news_items)
+    return ranked[0].headline if ranked else None
 
 
 def _is_priced_in(bars: list[DailyBar]) -> bool:
@@ -107,18 +130,9 @@ def build_catalyst_tags(
 
     # Prefer genuinely relevant articles over broad multi-symbol roundups and
     # mistagged pieces ("10 Health Care Stocks Whale Activity...", a diesel-prices
-    # economy article that never mentions the company). Sort key, in priority
-    # order: (1) does the article's own text actually name this ticker -- the
-    # strongest signal, since Alpaca's symbol tagging alone proved unreliable;
-    # (2) fewer tagged symbols = more likely a single-stock article, not a
-    # roundup; (3) most recent first among equally relevant items.
-    sorted_news = sorted(
-        news_items,
-        key=lambda item: (0 if _mentions_ticker(item) else 1, item.tagged_symbol_count, -item.published_at.timestamp()),
-    )
-
-    for item in sorted_news:
-        relevant = _mentions_ticker(item)
+    # economy article that never mentions the company).
+    for item in rank_news_by_relevance(news_items):
+        relevant = _is_relevant(item)
         category = _categorize_headline(item.headline)
         summary = item.headline if relevant else f"{item.headline} (general market news, not company-specific)"
         tags.append(
