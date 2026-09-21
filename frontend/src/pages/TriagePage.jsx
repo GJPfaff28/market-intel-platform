@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, GRADE_OPTIONS } from "../api/client";
 import { CatalystBadge, GradePill, PctChange, SetupBadge, SourceBadge, TimeframeBadge } from "../components/Badges";
+import { dedupeSetupMatches } from "../utils";
 
 function qualifies(grade) {
   const rank = ["D", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+"];
@@ -86,9 +87,11 @@ export function TriagePage() {
                   <td>
                     <SourceBadge source={c.source} />
                   </td>
-                  <td>
-                    {c.setup_matches.map((m, i) => (
-                      <SetupBadge key={i} setupType={m.setup_type} dayNumber={m.day_number} />
+                  <td style={{ whiteSpace: "normal", maxWidth: 220 }}>
+                    {dedupeSetupMatches(c.setup_matches).map((m, i) => (
+                      <span key={i} style={{ display: "inline-block", marginBottom: 2 }}>
+                        <SetupBadge setupType={m.setup_type} dayNumber={m.day_number} />
+                      </span>
                     ))}
                   </td>
                   <td>${c.price.toFixed(2)}</td>
@@ -130,7 +133,7 @@ export function TriagePage() {
               </p>
 
               <h3 style={{ fontSize: 12.5, textTransform: "uppercase", color: "var(--text-muted)" }}>Setup Match</h3>
-              {selected.setup_matches.map((m, i) => (
+              {dedupeSetupMatches(selected.setup_matches).map((m, i) => (
                 <div key={i} className="catalyst-item">
                   <SetupBadge setupType={m.setup_type} dayNumber={m.day_number} /> <TimeframeBadge timeframe={m.timeframe} />
                   <div style={{ marginTop: 4, color: "var(--text-muted)" }}>{m.detail}</div>

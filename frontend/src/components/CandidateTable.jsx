@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { CatalystBadge, GradePill, PctChange, SetupBadge, SourceBadge, TimeframeBadge } from "./Badges";
+import { dedupeSetupMatches } from "../utils";
 
 const COLUMNS = [
   { key: "ticker", label: "Ticker" },
@@ -79,9 +80,9 @@ export function CandidateTable({ candidates, onSelectTicker, selectedTicker }) {
               <td>
                 <SourceBadge source={c.source} />
               </td>
-              <td>
-                {c.setup_matches.map((m, i) => (
-                  <span key={i} style={{ marginRight: 6 }}>
+              <td style={{ whiteSpace: "normal", maxWidth: 200 }}>
+                {dedupeSetupMatches(c.setup_matches).map((m, i) => (
+                  <span key={i} style={{ display: "inline-block", marginRight: 4, marginBottom: 2 }}>
                     <SetupBadge setupType={m.setup_type} dayNumber={m.day_number} />
                   </span>
                 ))}
