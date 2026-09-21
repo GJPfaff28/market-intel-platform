@@ -127,6 +127,7 @@ class AlpacaProvider(MarketDataProvider, NewsProvider):
                 source=item.get("source", "Benzinga via Alpaca"),
                 published_at=dt.datetime.fromisoformat(item["created_at"].replace("Z", "+00:00")),
                 url=item.get("url", ""),
+                tagged_symbol_count=max(len(item.get("symbols", [])), 1),
             )
             for item in items
         ]

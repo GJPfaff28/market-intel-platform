@@ -93,7 +93,14 @@ def build_catalyst_tags(
             summary += f" ({action.from_grade} -> {action.to_grade})"
         tags.append(CatalystResult(kind="unscheduled", category="analyst", summary=summary))
 
-    for item in news_items:
+    # Prefer genuinely ticker-specific articles over broad multi-symbol roundups
+    # ("10 Health Care Stocks Whale Activity...") that Alpaca tags with every
+    # ticker they mention in passing -- these were winning the "first" catalyst
+    # slot ahead of real single-stock news just by being more recent. Within the
+    # same specificity, most recent first.
+    sorted_news = sorted(news_items, key=lambda item: (item.tagged_symbol_count, -item.published_at.timestamp()))
+
+    for item in sorted_news:
         category = _categorize_headline(item.headline)
         tags.append(
             CatalystResult(

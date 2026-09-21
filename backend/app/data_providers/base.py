@@ -43,6 +43,11 @@ class NewsItem:
     source: str
     published_at: dt.datetime
     url: str = ""
+    # How many tickers the source article was tagged with. Alpaca's news search
+    # returns broad "10 stocks whale activity" / market-wrap roundups tagged with
+    # every ticker they mention in passing, alongside genuine single-stock catalyst
+    # articles -- this lets callers prefer the latter. See catalysts/scoring.py.
+    tagged_symbol_count: int = 1
 
 
 @dataclass
