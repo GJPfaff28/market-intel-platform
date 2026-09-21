@@ -173,7 +173,7 @@ def run_morning_scan(db: Session, settings: Settings | None = None) -> dict:
 
 
 def _attach_catalyst_tags(db, candidate, ticker, today, bars, market_data, fundamentals, float_shares, news_cache):
-    news_items = _cached_ticker_news(market_data, news_cache, ticker, lookback_hours=36)
+    news_items = _cached_ticker_news(market_data, news_cache, ticker, lookback_hours=48)
     earnings_events = (
         fundamentals.get_earnings_calendar(today, today) if fundamentals else []
     )
@@ -224,7 +224,7 @@ def _write_sector_overview(
 
         top_mover_headline = None
         try:
-            top_mover_news = _cached_ticker_news(market_data, news_cache, top_ticker, lookback_hours=36)
+            top_mover_news = _cached_ticker_news(market_data, news_cache, top_ticker, lookback_hours=48)
             if top_mover_news:
                 top_mover_headline = top_mover_news[0].headline
         except Exception:  # noqa: BLE001

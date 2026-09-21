@@ -102,8 +102,8 @@ class AlpacaProvider(MarketDataProvider, NewsProvider):
             for b in bars
         ][-lookback_days:]
 
-    def get_news(self, ticker: str, lookback_hours: int = 24) -> list[NewsItem]:
-        return self._fetch_news(ticker=ticker, lookback_hours=lookback_hours)
+    def get_news(self, ticker: str, lookback_hours: int = 24, limit: int = 30) -> list[NewsItem]:
+        return self._fetch_news(ticker=ticker, lookback_hours=lookback_hours, limit=limit)
 
     def get_market_news(self, lookback_hours: int = 18, limit: int = 50) -> list[NewsItem]:
         """General market news (no symbol filter) -- the macro/policy headline pool

@@ -32,8 +32,8 @@ export function TriagePage() {
   function selectCandidate(c) {
     setSelectedId(c.id);
     setDraftGrades({
-      catalyst_grade: c.grade?.catalyst_grade || "",
-      setup_grade: c.grade?.setup_grade || "",
+      catalyst_grade: c.grade?.catalyst_grade || c.suggested_catalyst_grade || "",
+      setup_grade: c.grade?.setup_grade || c.suggested_setup_grade || "",
     });
   }
 
@@ -97,10 +97,16 @@ export function TriagePage() {
                   </td>
                   <td>{c.rvol.toFixed(1)}x</td>
                   <td>
-                    <GradePill grade={c.grade?.catalyst_grade} />
+                    <GradePill
+                      grade={c.grade?.catalyst_grade || c.suggested_catalyst_grade}
+                      suggested={!c.grade?.catalyst_grade}
+                    />
                   </td>
                   <td>
-                    <GradePill grade={c.grade?.setup_grade} />
+                    <GradePill
+                      grade={c.grade?.setup_grade || c.suggested_setup_grade}
+                      suggested={!c.grade?.setup_grade}
+                    />
                   </td>
                   <td>{qualifies(c.grade) ? "✅" : ""}</td>
                 </tr>
@@ -143,6 +149,11 @@ export function TriagePage() {
 
             <div>
               <h3 style={{ fontSize: 12.5, textTransform: "uppercase", color: "var(--text-muted)" }}>Grade this candidate</h3>
+              {!selected.grade?.catalyst_grade && !selected.grade?.setup_grade && (
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: -4, marginBottom: 12 }}>
+                  Pre-filled with the program's suggested grade — review and adjust before saving.
+                </p>
+              )}
               <div style={{ display: "flex", gap: 16, marginBottom: 14 }}>
                 <label>
                   <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 4 }}>Catalyst Grade</div>

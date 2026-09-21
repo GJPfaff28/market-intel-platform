@@ -48,6 +48,8 @@ class CandidateOut(BaseModel):
     catalyst_tags: list[CatalystTagOut]
     grade: GradeOut | None
     prior_grade: GradeOut | None = None
+    suggested_catalyst_grade: str | None = None
+    suggested_setup_grade: str | None = None
 
     class Config:
         from_attributes = True

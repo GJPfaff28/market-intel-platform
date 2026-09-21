@@ -8,6 +8,7 @@ known scheduled event.
 from __future__ import annotations
 
 import datetime as dt
+import re
 from dataclasses import dataclass
 
 from app.data_providers.base import AnalystAction, DailyBar, EarningsEvent, NewsItem
@@ -54,6 +55,17 @@ def _categorize_headline(headline: str) -> str:
     return "other"
 
 
+def _mentions_ticker(item: NewsItem) -> bool:
+    """Does the article's own text actually name this ticker, as opposed to just
+    being in Alpaca's (often loose/mistagged) symbols list for the request? This
+    catches cases like a "$6.51 Diesel..." economy article that Alpaca returns for
+    META's news query despite never mentioning Meta anywhere in the text -- a much
+    more reliable relevance signal than the symbol-count heuristic alone.
+    """
+    pattern = re.compile(rf"\b{re.escape(item.ticker)}\b", re.IGNORECASE)
+    return bool(pattern.search(item.headline) or pattern.search(item.summary))
+
+
 def _is_priced_in(bars: list[DailyBar]) -> bool:
     if len(bars) < PRICED_IN_RUNUP_LOOKBACK_DAYS + 1:
         return False
@@ -93,20 +105,27 @@ def build_catalyst_tags(
             summary += f" ({action.from_grade} -> {action.to_grade})"
         tags.append(CatalystResult(kind="unscheduled", category="analyst", summary=summary))
 
-    # Prefer genuinely ticker-specific articles over broad multi-symbol roundups
-    # ("10 Health Care Stocks Whale Activity...") that Alpaca tags with every
-    # ticker they mention in passing -- these were winning the "first" catalyst
-    # slot ahead of real single-stock news just by being more recent. Within the
-    # same specificity, most recent first.
-    sorted_news = sorted(news_items, key=lambda item: (item.tagged_symbol_count, -item.published_at.timestamp()))
+    # Prefer genuinely relevant articles over broad multi-symbol roundups and
+    # mistagged pieces ("10 Health Care Stocks Whale Activity...", a diesel-prices
+    # economy article that never mentions the company). Sort key, in priority
+    # order: (1) does the article's own text actually name this ticker -- the
+    # strongest signal, since Alpaca's symbol tagging alone proved unreliable;
+    # (2) fewer tagged symbols = more likely a single-stock article, not a
+    # roundup; (3) most recent first among equally relevant items.
+    sorted_news = sorted(
+        news_items,
+        key=lambda item: (0 if _mentions_ticker(item) else 1, item.tagged_symbol_count, -item.published_at.timestamp()),
+    )
 
     for item in sorted_news:
+        relevant = _mentions_ticker(item)
         category = _categorize_headline(item.headline)
+        summary = item.headline if relevant else f"{item.headline} (general market news, not company-specific)"
         tags.append(
             CatalystResult(
                 kind="unscheduled",
-                category=category,
-                summary=item.headline,
+                category=category if relevant else "market_wide",
+                summary=summary,
             )
         )
 

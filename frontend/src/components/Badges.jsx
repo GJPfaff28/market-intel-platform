@@ -27,8 +27,15 @@ export function CatalystBadge({ kind }) {
   return <span className={`badge badge-${kind}`}>{kind === "scheduled" ? "Scheduled" : "Unscheduled"}</span>;
 }
 
-export function GradePill({ grade }) {
+export function GradePill({ grade, suggested }) {
   if (!grade) return <span className="grade-pill" style={{ opacity: 0.4 }}>—</span>;
+  if (suggested) {
+    return (
+      <span className="grade-pill" style={{ borderStyle: "dashed", opacity: 0.75 }} title="Suggested by program — not yet confirmed">
+        {grade}*
+      </span>
+    );
+  }
   return <span className="grade-pill">{grade}</span>;
 }
 

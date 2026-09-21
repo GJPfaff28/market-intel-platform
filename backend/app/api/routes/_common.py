@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.schemas import CandidateOut, GradeOut
 from app.db.models import Grade, ScanCandidate
+from app.grading_engine import suggest_catalyst_grade, suggest_setup_grade
 
 
 def get_prior_grade(db: Session, ticker: str, before_date: dt.date) -> GradeOut | None:
@@ -25,4 +26,6 @@ def get_prior_grade(db: Session, ticker: str, before_date: dt.date) -> GradeOut 
 def serialize_candidate(db: Session, candidate: ScanCandidate) -> CandidateOut:
     out = CandidateOut.model_validate(candidate)
     out.prior_grade = get_prior_grade(db, candidate.ticker, candidate.scan_date)
+    out.suggested_catalyst_grade = suggest_catalyst_grade(candidate)
+    out.suggested_setup_grade = suggest_setup_grade(candidate)
     return out
