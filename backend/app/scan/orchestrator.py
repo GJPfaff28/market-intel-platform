@@ -21,6 +21,7 @@ from app.data_providers.factory import get_fundamentals_provider, get_market_dat
 from app.db.models import (
     CandidateSource,
     CatalystTag,
+    MarketOverviewSnapshot,
     NearMiss,
     ScanCandidate,
     SectorOverview,
@@ -79,6 +80,7 @@ def run_morning_scan(db: Session, settings: Settings | None = None) -> dict:
     db.query(ScanCandidate).filter(ScanCandidate.scan_date == today).delete()
     db.query(NearMiss).filter(NearMiss.scan_date == today).delete()
     db.query(SectorOverview).filter(SectorOverview.scan_date == today).delete()
+    db.query(MarketOverviewSnapshot).filter(MarketOverviewSnapshot.scan_date == today).delete()
     db.commit()
 
     candidates_written = 0

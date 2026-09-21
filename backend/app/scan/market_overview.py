@@ -54,7 +54,11 @@ def build_market_overview_snapshot(
         econ_calendar_json=json.dumps(econ_calendar),
         earnings_calendar_json=json.dumps(earnings_calendar),
     )
-    db.merge(snapshot)
+    # The caller (orchestrator.run_morning_scan) already deletes any existing row
+    # for `today` before calling this, so a plain insert is correct here -- merge()
+    # would match by primary key, not by scan_date's unique constraint, and was
+    # actually causing a duplicate-row IntegrityError on a same-day re-run.
+    db.add(snapshot)
 
 
 def _fetch_economic_calendar(fundamentals: FinnhubProvider, start: dt.date, end: dt.date) -> list[dict]:
