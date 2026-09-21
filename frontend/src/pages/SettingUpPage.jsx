@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, SETUP_LABELS } from "../api/client";
 import { PctChange, SetupBadge } from "../components/Badges";
 
-const SETUP_TYPES = ["momentum_breakout", "day_2_3", "reversal"];
+const SETUP_TYPES = ["momentum_breakout", "day_2_3"];
 
 export function SettingUpPage() {
   const [activeSetup, setActiveSetup] = useState(null);

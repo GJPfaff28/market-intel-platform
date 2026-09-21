@@ -163,7 +163,7 @@ User's actual process:
   **$2B market cap** cutoff (≥$2B = large cap = 4% threshold; <$2B = small cap = 8%
   threshold).
 
-### Setup 3: Reversal / Mean-Reversion — DECIDED
+### Setup 3: Reversal / Mean-Reversion — DEFINED, THEN DISABLED (see below)
 - **Trigger (both required together):** climactic/exhaustion reversal — a stock that's
   been extended for multiple sessions shows exhaustion — combined with a technical
   extension measure: **distance from the 8 EMA** and **trading outside the 20-day
@@ -172,6 +172,11 @@ User's actual process:
   candidates.
 - **Timeframe:** **daily chart only** — no intraday component for this setup (unlike
   Setup 1, which uses daily+intraday together).
+- **DISABLED post-launch:** after using the live dashboard, user asked to drop this
+  setup entirely and focus only on Momentum/Breakout and Day 2/3 Continuation. The
+  rule definition above is kept for reference and the code
+  (`app/setups/reversal.py`) is left in place, tested and working — it's just no
+  longer called from `app/setups/engine.py`. Easy to re-enable later if wanted.
 
 ---
 
@@ -347,3 +352,8 @@ User's actual process:
   breakdown, expanding Tab 4's sector section — all 11 GICS sectors, dual attribution
   logic (dominant stock news + sector macro/policy news). Supersedes the earlier
   "top 2 sectors weekly" idea.
+- **Post-launch (live dashboard use):** after building and using the real thing, user
+  disabled Setup 3 (Reversal/Mean-Reversion) to focus only on Momentum/Breakout and
+  Day 2/3 Continuation. Also fixed several live-testing bugs (Alpaca snapshot parsing,
+  Finnhub rate limiting, mistagged/roundup news attribution, a joinedload cartesian
+  duplication bug, a same-day re-run race condition) and added a PM Vol % column.

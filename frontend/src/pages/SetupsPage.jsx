@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, SETUP_LABELS } from "../api/client";
 import { CandidateTable } from "../components/CandidateTable";
 
-const SETUP_TYPES = ["momentum_breakout", "day_2_3", "reversal"];
+const SETUP_TYPES = ["momentum_breakout", "day_2_3"];
 
 export function SetupsPage() {
   const [activeSetup, setActiveSetup] = useState(SETUP_TYPES[0]);
