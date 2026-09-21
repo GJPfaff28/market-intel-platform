@@ -48,28 +48,44 @@ cp .env.example .env
 
 ## 2. Running it locally
 
-### Backend
+### First-time setup (do this once)
 
 ```bash
 cd backend
 python3 -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --port 8000
+cd ../frontend
+npm install
 ```
 
-The database (`backend/scanner.db`) is created automatically on first run.
+The database (`backend/scanner.db`) is created automatically the first time the
+backend runs.
 
-### Frontend
+### Every time after that: double-click `start-dashboard.bat`
+
+No commands to remember. From the repo's root folder, double-click
+**`start-dashboard.bat`**. It opens two windows (backend + frontend) and your
+browser automatically at http://localhost:5173. Leave both windows open while you
+use the dashboard; close them (or Ctrl+C in each) when you're done.
+
+The dashboard opens on **Market Overview** (the landing tab) — it'll be empty until
+you've run a scan (see below).
+
+If you'd rather run the two pieces by hand (e.g. to see their logs directly), each
+has its own shortcut too — `backend\start-backend.bat` and
+`frontend\start-frontend.bat` — or the manual commands:
 
 ```bash
+# backend, in its own terminal
+cd backend
+venv\Scripts\activate            # Mac/Linux: source venv/bin/activate
+uvicorn app.main:app --port 8000
+
+# frontend, in a second terminal
 cd frontend
-npm install
 npm run dev
 ```
-
-Open http://localhost:5173. The dashboard opens on **Market Overview** (the landing
-tab) — it'll be empty until you've run a scan (see below).
 
 ### Add your watchlist
 
@@ -78,14 +94,17 @@ starting with). This is a manual add/remove list, same as the planning doc decid
 
 ### Run a scan manually (before setting up the schedule)
 
-With the backend running:
+Double-click **`run-scan.bat`** from the repo's root (needs the backend window
+already running). It can take 2-3 minutes — that's expected, the free-tier APIs are
+rate-limited. Refresh the dashboard once it finishes.
+
+Or by hand:
 
 ```bash
 curl -X POST http://localhost:8000/api/scan/run
 ```
 
-or just open http://localhost:8000/docs and hit `POST /api/scan/run` from the
-Swagger UI. Refresh the dashboard afterward.
+or open http://localhost:8000/docs and hit `POST /api/scan/run` from the Swagger UI.
 
 ---
 
