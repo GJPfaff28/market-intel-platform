@@ -4,6 +4,7 @@ __pycache__/
 .env
 *.db
 .DS_Store
+backend/data/universe_full.csv
 
 # frontend
 node_modules/

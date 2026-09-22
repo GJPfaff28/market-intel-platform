@@ -140,17 +140,28 @@ whenever you sit down; the data will already be there.
 
 The broader-market scan (as opposed to your watchlist) reads from
 `backend/data/universe.csv` — a starter list of ~120 liquid tickers across all 11
-GICS sectors, shipped so the scanner works out of the box without extra setup.
+GICS sectors, shipped so the scanner works out of the box without extra setup. That's
+why a scan reports a `tickers_evaluated` count around 100-150 (your watchlist plus this
+starter list) instead of covering the whole market.
 
-To scan the full market instead of this starter list, replace that CSV with a fuller
-one (same two columns: `ticker,sector`). NASDAQ publishes a free, public list of all
-listed tickers:
+To scan the real full market instead, run the built-in refresh script — it pulls
+NASDAQ's free, public list of every listed US ticker (thousands of names) and saves it
+alongside the starter list:
 
-- ftp://ftp.nasdaqtrader.com/SymbolDirectory/nasdaqlisted.txt
-- ftp://ftp.nasdaqtrader.com/SymbolDirectory/otherlisted.txt
+```
+cd backend
+venv\Scripts\activate          (Windows)   or   source venv/bin/activate   (Mac/Linux)
+python -m app.scan.refresh_universe
+```
 
-You'll need to map each ticker to a GICS sector yourself (or a data vendor's sector
-field) for the Market Overview tab's sector breakdown to include it.
+This writes `backend/data/universe_full.csv`. From then on, every scan automatically
+merges it with the curated `universe.csv` — no further setup needed, and `git pull`
+won't touch it (it's per-machine and gitignored). Re-run the command occasionally to
+pick up newly listed/delisted tickers.
+
+Only `universe.csv`'s curated names carry a GICS sector, so newly discovered tickers
+from `universe_full.csv` won't show up in the Market Overview tab's sector breakdown —
+they'll still be scanned for setups and catalysts like any other candidate.
 
 ---
 
