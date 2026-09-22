@@ -28,7 +28,7 @@ from app.db.models import (
     SetupMatch,
     WatchlistStock,
 )
-from app.scan.filters import passes_broader_scan_filters, rvol as compute_rvol
+from app.scan.filters import passes_broader_scan_filters, passes_setup_quality_gate, rvol as compute_rvol
 from app.scan.market_overview import build_market_overview_snapshot
 from app.scan.universe import load_universe
 from app.setups.engine import evaluate_near_misses, evaluate_setups
@@ -130,6 +130,13 @@ def run_morning_scan(db: Session, settings: Settings | None = None) -> dict:
 
         setup_matches = evaluate_setups(bars, market_cap)
         near_misses = evaluate_near_misses(bars, market_cap)
+
+        # A raw pattern match isn't enough on its own -- user-specified quality gate
+        # (RVOL >= 2, move >= 1 ATR, pre-market % over 3%/6% by cap size) applies to
+        # every setup match regardless of source, since it's a defining property of
+        # a valid setup, not just a broader-scan discovery filter.
+        if setup_matches and not passes_setup_quality_gate(quote, avg_volume, bars, market_cap):
+            setup_matches = []
 
         if setup_matches:
             candidate = ScanCandidate(

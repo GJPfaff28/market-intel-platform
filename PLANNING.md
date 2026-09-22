@@ -118,6 +118,37 @@ User's actual process:
 - **A+, A, A-, B+, B, B-, C+, C, C-, D.** No F. No D+/D-. (D is the floor, not graded
   further.) Applied separately to catalyst quality and chart setup quality per stock.
 
+### Catalyst grade rubric — DECIDED (post-launch, replaces the earlier point-based heuristic)
+- **A** = big news that impacts the business and has **not already been priced in**.
+  **A+** specifically if it has a known **timeline** (a scheduled event -- in the
+  current data, only earnings is ever tagged "scheduled"; unscheduled big news like
+  M&A/FDA/short-seller reports caps at A, not A+, since we can't confirm those had a
+  known-in-advance date).
+- **B** = news that's meaningful to the company, but doesn't alter it in any big way
+  (analyst actions, guidance changes, offerings, halts).
+- **C** = there is news, but it's not very impactful (uncategorized "other" news) --
+  **also** where a big catalyst lands if it's already priced in (real news, but a
+  degraded opportunity, not a clean A).
+- **D** = no news at all, or news that can be disregarded (mistagged/generic
+  market-wide roundup articles).
+- Implemented in `app/grading_engine.py::_catalyst_grade_for_tag`. When a candidate
+  has multiple catalyst tags, the single best-graded one wins (a weak/irrelevant
+  headline can't drag down a genuinely strong catalyst also present).
+
+### Setup quality gate — DECIDED (post-launch addition)
+- Applies to **both** remaining setups (Momentum/Breakout, Day 2/3), regardless of
+  source (watchlist or broader scan) -- a defining property of a valid setup match,
+  not just a broader-scan discovery filter:
+  - **RVOL >= 2.0**
+  - Today's price move **>= 1x ATR** (14-period Average True Range)
+  - Pre-market **% change over 3%** for large/mega cap (>= $2B, same cutoff as Setup
+    2's Day-1 threshold) or **over 6%** for small cap
+- A setup match that fails this gate is dropped entirely from that day's candidates
+  (not demoted to a near-miss -- near-misses are about proximity to the underlying
+  chart pattern, not about today's volume/move size).
+- Implemented in `app/scan/filters.py::passes_setup_quality_gate`, called from
+  `app/scan/orchestrator.py` right after `evaluate_setups()`.
+
 ### Dashboard tabs — DECIDED (list; each gets its own detailed design round)
 1. **Morning Scan / Candidates** — today's auto-generated list (core output).
 2. **Grading / Triage workspace** — score catalyst + setup quality, narrow to today's

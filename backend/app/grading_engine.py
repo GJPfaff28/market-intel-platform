@@ -1,36 +1,26 @@
 """Rule-based grade suggestions for the Triage tab (PLANNING.md Tab 2).
 
-Computes a starting-point A+ to D grade for catalyst quality and setup quality from
-the same signals a trader would look at: catalyst type / float amplification /
-priced-in for catalyst quality, setup confluence / confirmation / RVOL for setup
-quality. This is a SUGGESTION the frontend uses to pre-fill the Triage grading
-dropdowns -- the user still confirms or overrides it and clicks Save before it
-counts toward the B-or-better auto-promotion to Today's Watchlist (grading.py). The
-scoring below is intentionally simple and inspectable (not a black box) so the
-thresholds can be tuned once real grading feedback comes in.
+Computes a starting-point A+ to D grade for catalyst quality (per the user's
+explicit rubric -- see _catalyst_grade_for_tag) and setup quality (confluence,
+Day-3 confirmation, RVOL/move-size). This is a SUGGESTION the frontend uses to
+pre-fill the Triage grading dropdowns -- the user still confirms or overrides it
+and clicks Save before it counts toward the B-or-better auto-promotion to Today's
+Watchlist (grading.py).
 """
 
 from __future__ import annotations
 
-from app.grading import GRADE_SCALE
+from app.grading import GRADE_RANK, GRADE_SCALE
 
-LOW_FLOAT_SHARES = 20_000_000
-HIGH_FLOAT_SHARES = 300_000_000
-
-# Points awarded for the single best-scoring catalyst tag on a candidate (not
-# summed across tags, so five generic headlines can't out-score one real one).
-_CATEGORY_POINTS = {
-    "ma": 3,
-    "fda": 3,
-    "short_report": 3,
-    "earnings": 2,
-    "analyst": 2,
-    "guidance": 1,
-    "offering": 1,
-    "halt": 1,
-    "other": 0,
-    "market_wide": 0,  # mistagged/generic roundup -- see catalysts/scoring.py
-}
+# Catalyst categories that count as "big news that impacts the business" for the
+# A/A+ tier below. "earnings" is handled separately since it's the only category
+# that's ever tagged kind="scheduled" in our data (see catalysts/scoring.py).
+_HIGH_IMPACT_CATEGORIES = {"ma", "fda", "short_report"}
+# "meaningful to the company, but doesn't alter it in any big way" -- the B tier.
+_MODERATE_IMPACT_CATEGORIES = {"analyst", "guidance", "offering", "halt"}
+# "other" (real, relevant news that doesn't match a known category) falls through
+# to C -- "it's news, but it's not very impactful". "market_wide" (mistagged/
+# generic roundup, see catalysts/scoring.py) is D -- news we can disregard.
 
 _GRADE_THRESHOLDS = [
     (7, "A+"),
@@ -65,32 +55,41 @@ def _volume_and_move_bonus(rvol: float, pct_change: float) -> float:
     return bonus
 
 
-def _float_bonus(float_shares: float | None) -> float:
-    if float_shares is None:
-        return 0.0
-    if float_shares < LOW_FLOAT_SHARES:
-        return 1.0  # low float amplifies the move, per PLANNING.md catalyst philosophy
-    if float_shares > HIGH_FLOAT_SHARES:
-        return -0.5
-    return 0.0
+def _catalyst_grade_for_tag(tag) -> str:
+    """A/B/C/D rubric, per the user's explicit definition:
+      A = big news that impacts the business and has NOT already been priced in.
+          A+ specifically if it has a known timeline (a scheduled event, not a
+          surprise -- in our data, only earnings is ever tagged kind="scheduled").
+      B = news that's meaningful to the company, but doesn't alter it in any big way.
+      C = there is news, but it's not very impactful.
+      D = no news, or news that can be disregarded.
+    """
+    if tag.category == "market_wide":
+        return "D"  # mistagged/generic roundup -- disregard, per catalysts/scoring.py
+
+    if tag.priced_in_flag:
+        # Big news that already ran into is priced in -- real, meaningful news, but
+        # the opportunity is degraded (possible "sell the news"), not a clean A.
+        return "C"
+
+    if tag.category in _HIGH_IMPACT_CATEGORIES or tag.category == "earnings":
+        return "A+" if tag.kind == "scheduled" else "A"
+
+    if tag.category in _MODERATE_IMPACT_CATEGORIES:
+        return "B"
+
+    return "C"  # "other" -- news exists, but isn't very impactful
 
 
 def suggest_catalyst_grade(candidate) -> str:
     tags = candidate.catalyst_tags
     if not tags:
-        return GRADE_SCALE[0]  # no catalyst at all -- not genuinely "in play"
+        return GRADE_SCALE[0]  # no news at all -- D
 
-    best_category_points = max(_CATEGORY_POINTS.get(t.category, 0) for t in tags)
-    any_priced_in = any(t.priced_in_flag for t in tags)
-
-    points = best_category_points
-    if any_priced_in:
-        points -= 2  # PLANNING.md: a stock that already ran into the event may be "sold the news"
-
-    points += _volume_and_move_bonus(candidate.rvol, candidate.pct_change)
-    points += _float_bonus(candidate.float_shares)
-
-    return _points_to_grade(points)
+    # Best tag wins -- one great catalyst shouldn't be dragged down to a lower
+    # grade just because a weaker/irrelevant headline also showed up for the
+    # same candidate.
+    return max((_catalyst_grade_for_tag(t) for t in tags), key=lambda g: GRADE_RANK[g])
 
 
 def suggest_setup_grade(candidate) -> str:
